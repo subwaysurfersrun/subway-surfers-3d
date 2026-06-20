@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Subway Surfers 3D — Logo</title>
+<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Roboto:wght@700;900&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:100%; height:100%; overflow:hidden; background:#0e0e1c; font-family:'Roboto',sans-serif; }
+  #stage { position:relative; width:100%; height:100%; }
+  #bg {
+    position:absolute; inset:0;
+    background: radial-gradient(ellipse at 50% 35%, #2b2b52 0%, #1c1c38 55%, #0a0a14 100%);
+  }
+  .ring { position:absolute; left:50%; top:34%; border:2px solid rgba(120,120,180,0.28); border-radius:50%; transform:translate(-50%,-50%); }
+  #canvas-wrap { position:absolute; inset:0; z-index:2; }
+  canvas { display:block; width:100%; height:100%; }
+
+  /* ── 3D extruded wordmark (CSS depth layers, same palette as in-game HUD) ── */
+  .wordmark-scene {
+    position:absolute; left:6%; bottom:12%; z-index:5;
+    perspective: 1000px; pointer-events:none;
+  }
+  .wordmark {
+    position:relative; transform-style:preserve-3d;
+    transform: rotateX(14deg) rotateY(-12deg);
+    animation: tilt 7s ease-in-out infinite;
+  }
+  @keyframes tilt {
+    0%,100% { transform: rotateX(14deg) rotateY(-12deg) translateY(0); }
+    50%     { transform: rotateX(10deg) rotateY(-7deg) translateY(-6px); }
+  }
+  .line { position:relative; height:88px; }
+  .line .layer {
+    position:absolute; left:0; top:0;
+    font-family:'Bangers',cursive; font-size:92px; line-height:1;
+    letter-spacing:2px; white-space:nowrap;
+  }
+  /* depth layers painted back-to-front; JS sets translateZ + shade per layer */
+  .layer.front {
+    background: linear-gradient(180deg,#FFF3B0 0%, #FFD700 45%, #FFA500 100%);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    -webkit-text-stroke: 2px #2a1300;
+    filter: drop-shadow(0 10px 18px rgba(0,0,0,0.55));
+  }
+  .sub-3d {
+    margin-top:14px; font-family:'Roboto',sans-serif; font-weight:900;
+    font-size:24px; letter-spacing:7px; color:#4ECDC4;
+    text-shadow: 0 1px 0 #0d4f4a, 0 2px 0 #0d4f4a, 0 3px 0 #0d4f4a, 0 8px 14px rgba(0,0,0,0.5);
+    transform: translateZ(2px);
+  }
+  .badge3d {
+    position:absolute; right:-26px; top:-34px;
+    width:84px; height:84px; border-radius:50%;
+    background: radial-gradient(circle at 35% 30%, #FFF3B0, #FFB300 60%, #a86b00 100%);
+    border:5px solid #1a1a36; display:flex; align-items:center; justify-content:center;
+    font-family:'Bangers',cursive; font-size:36px; color:#1a1a36;
+    transform: rotate(-8deg) translateZ(30px);
+    box-shadow: 0 10px 18px rgba(0,0,0,0.5);
+  }
+
+  #loading { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; z-index:9; color:#FFD700; font-family:'Bangers',cursive; font-size:22px; letter-spacing:2px; }
+  #hint { position:absolute; bottom:18px; right:22px; z-index:6; color:rgba(255,255,255,0.45); font-size:11px; letter-spacing:1px; }
+
+  @media (max-width:760px){
+    .wordmark-scene{ left:50%; bottom:8%; transform:translateX(-50%); }
+    .layer{ font-size:58px !important; }
+    .sub-3d{ font-size:16px; letter-spacing:4px; }
+    .badge3d{ width:58px; height:58px; font-size:24px; right:-14px; top:-22px; }
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="bg"></div>
+  <div id="loading">MEMUAT 3D…</div>
+  <div id="canvas-wrap"></div>
+
+  <div class="wordmark-scene">
+    <div class="wordmark" id="wordmark">
+      <div class="line" id="line1"></div>
+      <div class="line" id="line2"></div>
+      <div class="sub-3d">3D ENDLESS RUNNER</div>
+      <div class="badge3d">GO</div>
+    </div>
+  </div>
+
+  <div id="hint">live 3D • gerakkan kursor untuk parallax</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ════════════════════════════════════════════════════════════════
+// 1) EXTRUDED WORDMARK — stacked CSS layers simulate real depth
+// ════════════════════════════════════════════════════════════════
+function buildExtrudedLine(el, text, depth, topColorStops) {
+  const LAYERS = 16;
+  for (let i = LAYERS; i >= 0; i--) {
+    const layer = document.createElement('div');
+    layer.className = 'layer' + (i === 0 ? ' front' : '');
+    layer.textContent = text;
+    const z = -i * (depth / LAYERS);
+    const shade = Math.max(0.18, 1 - i * 0.05);
+    if (i !== 0) {
+      const r = Math.round(120 * shade + 20);
+      const g = Math.round(70 * shade + 10);
+      const b = 0;
+      layer.style.color = `rgb(${r},${g},${b})`;
+    }
+    layer.style.transform = `translateZ(${z}px)`;
+    el.appendChild(layer);
+  }
+}
+buildExtrudedLine(document.getElementById('line1'), 'SUBWAY', 26);
+buildExtrudedLine(document.getElementById('line2'), 'SURFERS', 26);
+
+// mouse / touch parallax on the wordmark
+const wordmark = document.getElementById('wordmark');
+let tx = -12, ty = 14, tx0 = tx, ty0 = ty;
+window.addEventListener('pointermove', (e) => {
+  const nx = (e.clientX / window.innerWidth - 0.5) * 2;
+  const ny = (e.clientY / window.innerHeight - 0.5) * 2;
+  tx0 = -12 - nx * 10;
+  ty0 = 14 + ny * 6;
+});
+(function animWord() {
+  tx += (tx0 - tx) * 0.06;
+  ty += (ty0 - ty) * 0.06;
+  wordmark.style.animationPlayState = 'paused';
+  wordmark.style.transform = `rotateX(${ty}deg) rotateY(${tx}deg)`;
+  requestAnimationFrame(animWord);
+})();
+
+// ════════════════════════════════════════════════════════════════
+// 2) LIVE THREE.JS SCENE — same building blocks as the game's
+//    voxel character (box geometry + MeshStandardMaterial), so the
+//    logo's character is rendered with the exact 3D engine/style
+//    used inside subway_surfers_bus-8_3_.html
+// ════════════════════════════════════════════════════════════════
+const wrap = document.getElementById('canvas-wrap');
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.shadowMap.enabled = true;
+wrap.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 50);
+
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+
+// lighting — key + teal rim + gold accent, mirroring the game's HUD palette
+scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+const key = new THREE.DirectionalLight(0xffffff, 1.05);
+key.position.set(3, 6, 4);
+key.castShadow = true;
+key.shadow.mapSize.set(1024, 1024);
+scene.add(key);
+const rim = new THREE.DirectionalLight(0x4ECDC4, 0.8);
+rim.position.set(-4, 2.5, -3);
+scene.add(rim);
+const accent = new THREE.PointLight(0xFFD700, 1.1, 8);
+accent.position.set(1.5, 2.2, 2.2);
+scene.add(accent);
+
+// ── ground + rail track (same gold rail / tie motif as the game world) ──
+const ground = new THREE.Mesh(
+  new THREE.CircleGeometry(6, 48),
+  new THREE.MeshStandardMaterial({ color: 0x14141f, roughness: 0.95 })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+const railMat = new THREE.MeshStandardMaterial({ color: 0xFFD700, emissive: 0xFFD700, emissiveIntensity: 0.25, metalness: 0.6, roughness: 0.3 });
+[-0.5, 0.5].forEach(x => {
+  const rail = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 10), railMat);
+  rail.position.set(x, 0.025, -1);
+  scene.add(rail);
+});
+const tieMat = new THREE.MeshStandardMaterial({ color: 0x3a2a1a, roughness: 0.9 });
+for (let i = 0; i < 10; i++) {
+  const tie = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.04, 0.12), tieMat);
+  tie.position.set(0, 0.015, -i * 0.9 + 1);
+  scene.add(tie);
+}
+
+// ── voxel character (Jake palette: identical hex values to the game) ──
+const colors = { skin: 0xffccaa, shirt: 0xFF6B6B, pants: 0x3498db, shoes: 0xFFD700, hat: 0xe74c3c };
+const character = new THREE.Group();
+
+function box(w, h, d, color, extra) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial(Object.assign({ color }, extra)));
+  m.castShadow = true;
+  return m;
+}
+function limb(x, topY, w, h, d, color, rotX, rotZ) {
+  const pivot = new THREE.Group();
+  pivot.position.set(x, topY, 0);
+  const mesh = box(w, h, d, color);
+  mesh.position.set(0, -h / 2, 0);
+  pivot.add(mesh);
+  // shoe cap on legs
+  if (h > 0.55) {
+    const shoe = box(w + 0.06, 0.15, d + 0.1, colors.shoes);
+    shoe.position.set(0, -h + 0.02, 0.06);
+    pivot.add(shoe);
+  }
+  pivot.rotation.x = rotX || 0;
+  pivot.rotation.z = rotZ || 0;
+  return pivot;
+}
+
+const body = box(0.6, 0.7, 0.32, colors.shirt);
+body.position.y = 1.35;
+character.add(body);
+
+const head = box(0.42, 0.45, 0.42, colors.skin);
+head.position.y = 2.02;
+character.add(head);
+
+const eyeMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+[-0.11, 0.11].forEach(ex => {
+  const eye = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.05), eyeMat);
+  eye.position.set(ex, 2.06, 0.22);
+  character.add(eye);
+});
+
+// cap
+const cap = new THREE.Mesh(new THREE.SphereGeometry(0.25, 14, 10, 0, Math.PI * 2, 0, Math.PI / 1.8), new THREE.MeshStandardMaterial({ color: colors.hat }));
+cap.position.y = 2.32;
+cap.castShadow = true;
+character.add(cap);
+const brim = box(0.44, 0.05, 0.22, colors.hat);
+brim.position.set(0, 2.2, 0.26);
+character.add(brim);
+
+// running-pose limbs (hinged at shoulder/hip)
+character.add(limb(-0.45, 1.72, 0.16, 0.5, 0.16, colors.skin, -0.9, 0.05));
+character.add(limb(0.45, 1.72, 0.16, 0.5, 0.16, colors.skin, 0.75, -0.05));
+character.add(limb(-0.16, 1.0, 0.21, 0.62, 0.21, colors.pants, 0.95, 0));
+character.add(limb(0.16, 1.0, 0.21, 0.62, 0.21, colors.pants, -0.85, 0));
+
+character.position.set(0.6, 0.55, 0.3);
+character.rotation.y = -0.45;
+scene.add(character);
+
+// soft contact shadow blob
+const shadowBlob = new THREE.Mesh(
+  new THREE.CircleGeometry(0.55, 24),
+  new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35 })
+);
+shadowBlob.rotation.x = -Math.PI / 2;
+shadowBlob.position.set(0.6, 0.011, 0.3);
+scene.add(shadowBlob);
+
+// floating coin
+const coin = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.26, 0.26, 0.06, 24),
+  new THREE.MeshStandardMaterial({ color: 0xFFD700, emissive: 0xFFA500, emissiveIntensity: 0.4, metalness: 0.7, roughness: 0.25 })
+);
+coin.position.set(1.7, 2.0, -0.6);
+coin.rotation.x = Math.PI / 2.4;
+coin.castShadow = true;
+scene.add(coin);
+
+// motion streaks behind the character
+const streakColors = [0x4ECDC4, 0xFF6B6B, 0xFFD700];
+const streaks = [];
+streakColors.forEach((c, i) => {
+  const s = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.4, 0.07),
+    new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.55 })
+  );
+  s.position.set(-0.6, 1.9 - i * 0.35, -0.2 - i * 0.15);
+  s.rotation.y = -0.3;
+  scene.add(s);
+  streaks.push(s);
+});
+
+camera.position.set(2.6, 2.0, 4.4);
+camera.lookAt(0.4, 1.1, 0);
+
+resize();
+document.getElementById('loading').style.display = 'none';
+
+let t = 0;
+function animate() {
+  requestAnimationFrame(animate);
+  t += 0.016;
+  character.position.y = 0.55 + Math.sin(t * 1.6) * 0.06;
+  character.rotation.y = -0.45 + Math.sin(t * 0.5) * 0.12;
+  coin.rotation.y += 0.04;
+  coin.position.y = 2.0 + Math.sin(t * 2) * 0.08;
+  streaks.forEach((s, i) => { s.material.opacity = 0.35 + Math.sin(t * 3 + i) * 0.2; });
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
